@@ -1,6 +1,5 @@
 const mc = require("minecraft-protocol");
 const fs = require("fs")
-const Item = require('prismarine-item')("1.12.2");
 const createServer = require("./mcserver.js");
 const Msg = require("./Msg.js");
 const BossBar = require('./bossbar.js')
@@ -8,34 +7,6 @@ let { server, emitter, } = createServer();
 
 
 if(!fs.existsSync("./chunk") && fs.existsSync("./example")) process.chdir("./example");
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -1,17 +1,19 @@
-const { CommandHandler, Command } = require("string-commands");
 const Msg = require("./Msg");
 const db = require("./usermanager");
 
 
-module.exports = function (serv, Parser) {
+module.exports = async function (serv, Parser) {
+	const { CommandHandler } = await import("string-commands");
+
 	const handler = new CommandHandler({ prefix: "/" });
-	handler.setIncorrectUsage((cmd, usage, _full, client) => {
-		client.chat(new Msg("Error: Incorrect usage: " + cmd + " " + usage, "red"));
+	handler.buildArguments = ({ ctx, args }) => [args, ctx.client];
+	handler.on("invalidUsage", ({ errors, command }) => {
+		client.chat(new Msg("Error: Incorrect usage: " + handler.prettyPrint(command) + "\n" + errors.map(e => "  - " + e).join("\n"), "red"));
 	});
-	handler.addCommand(new Command({
+	handler.addCommand(({
 		name: "image",
 		aliases: ["i"],
-		usage: [":link"],
+		usage: ["<link: text>"],
 		run: (args, client) => {
 			serv.chat(new Msg("> Displaying image sent by " + client.username, "dark_gray", args[0]));
 			let link = args[0];
@@ -24,7 +26,7 @@ module.exports = function (serv, Parser) {
 			};
 		},
 	}))
-	handler.addCommand(new Command({
+	handler.addCommand(({
 		name: "imagetest",
 		aliases: ["it"],
 		run: (args, client) => {
@@ -36,22 +38,21 @@ module.exports = function (serv, Parser) {
 			};
 		},
 	}));
-	handler.addCommand(new Command({
+	handler.addCommand(({
 		name: "play",
 		aliases: ["p"],
-		usage: [":src (yt link)"],
-		run: (args, client) => {
-			let src = args[0];
+		args: ["text"],
+		run: ([src], client) => {
 			serv.chat(new Msg("> Processing video...", "gray", src));
 			try {
 				serv.mplayer.play(src);
 			} catch (e) {
-				serv.mplayer.queue.shift();
+				//serv.mplayer.queue.shift();
 				serv.chat(new Msg(e.toString(), "red"));
 			};
 		},
 	}));
-	handler.addCommand(new Command({
+	handler.addCommand(({
 		name: "lagtrain",
 		run: (args, client) => {
 			serv.chat(new Msg("> Loading...", "gray"));
@@ -63,7 +64,7 @@ module.exports = function (serv, Parser) {
 			};
 		},
 	}));
-	handler.addCommand(new Command({
+	handler.addCommand(({
 		name: "playtest",
 		aliases: ["pt"],
 		usage: [],
@@ -80,7 +81,7 @@ module.exports = function (serv, Parser) {
 	}));
 	handler.addCommand({
 		name: "setfps",
-		usage: [":fps"],
+		usage: ["<fps:number>"],
 		run: (args) => {
 			serv.mplayer.FPS = args[0];
 			serv.chat(new Msg("> FPS set to " +args[0], "gray"))
@@ -100,10 +101,10 @@ module.exports = function (serv, Parser) {
 			db.save(client.username, client.db);
 		},
 	});
-	handler.addCommand(new Command({
+	handler.addCommand(({
 		name: "color",
 		aliases: ["c"],
-		usage: [":color number"],
+		usage: ["<color:number>"],
 		run: (args, client) => {
 			let h = Buffer.alloc(128 * 128).fill(Buffer.from(args[0], "hex"));
 			serv.mplayer.renderDisplays({

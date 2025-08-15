@@ -1,37 +1,19 @@
 const ffPath = require("ffmpeg-static");
 const ytdl = require("ytdl-core");
-const { Writable, Readable, Transform } = require("stream"); // aka stupid api i have to use
 const fs = require("fs");
 const { spawn } = require("child_process");
-const StreamSplitter = require("stream-split");
-const { createCanvas, loadImage } = require('canvas');
-const sharp = require("sharp");
-const { convertFrame } = require("./convert");
-const fetch = require("node-fetch");
+//const StreamSplitter = require("stream-split");
+//const { createCanvas, loadImage } = require('canvas');
+//const sharp = require("sharp");
+const { i2map } = require("./convert");
+//const fetch = require("node-fetch");
 const Msg = require("./Msg");
 const EventEmitter = require("events");
-const { createGzip, createGunzip } = require('zlib');
-const ByteBuffer = require("bytebuffer");
-const Cacher = require("./cacher");
-const { SongPlayer } = require("nmp-player");
+//const Cacher = require("./cacher");
+//const { SongPlayer } = require("nmp-player");
 
-const PNGHEADER = Buffer.from("89 50 4E 47 0D 0A 1A 0A".split(" ").join(""), "hex");
+//const PNGHEADER = Buffer.from("89 50 4E 47 0D 0A 1A 0A".split(" ").join(""), "hex");
 const FPS = 20;
-
-/*
-class VideoPlayer {
-	constructor(){
-
-	};
-};
-
-class VideoProcessor {};
-
-class SubtitlePlayer {};
-
-class AudioPlayer {};
-
-class AudioProcessor {};*/
 
 class DisplayList {
 	constructor(width, height, ids) {
@@ -46,7 +28,6 @@ class DisplayList {
 
 let startTime
 
-
 class MediaPlayer extends EventEmitter {
 	constructor(serv, opts = {}) {
 		super();
@@ -56,7 +37,7 @@ class MediaPlayer extends EventEmitter {
 		this.status = "stall"; // [stall, proc, play]
 		this.FPS = opts.FPS || FPS;
 		this.displays = new DisplayList(4, 2, [1, 2, 3, 4, 5, 6, 7, 8]);
-		this.cacher = new Cacher(this);
+		//this.cacher = new Cacher(this);
 		this.frames = [];
 		this.mediaHistory = [];
 		this.queue = [];
@@ -82,7 +63,7 @@ class MediaPlayer extends EventEmitter {
 			this.frames[0] = null;
 			this.frames.shift();
 		}, 1000 / FPS);
-		if(globalThis.$lagtrain) {
+		/* if (globalThis.$lagtrain) {
 			let songplayer = new SongPlayer()
 
 			songplayer._note = (packet) => {
@@ -93,7 +74,7 @@ class MediaPlayer extends EventEmitter {
 			}
 
 			songplayer.play('./Lagtrain.nbs')
-		};
+		}; */
 	};
 	stop() {
 		if (this.ffmpegProcess) {
@@ -111,7 +92,7 @@ class MediaPlayer extends EventEmitter {
 		//if(this.queue[0]) this.play();
 	};
 	async saveToCache() {
-		return await this.cacher.saveToCache();
+		//return await this.cacher.saveToCache();
 		/*
 		if (this.frames.length === 0) return console.log("nothing to save");
 		let fpath = "./cached/" + this.videoID + "_data";
@@ -132,7 +113,7 @@ class MediaPlayer extends EventEmitter {
 		return true;*/
 	};
 	async loadFromCache(videoID) {
-		return await this.cacher.loadFromCache(videoID);
+		//return await this.cacher.loadFromCache(videoID);
 		/*
 		let fpath = "./cached/" + videoID + "_data";
 		console.log(fpath);
@@ -168,7 +149,7 @@ class MediaPlayer extends EventEmitter {
 		this.frames.push(buf);
 	};
 	play(src = this.queue[0]) {
-		if(this.status !== "stall") return;
+		if (this.status !== "stall") return;
 		if (this.ffmpegProcess) return this.serv.chat(new Msg("> FFMPEG is currently processing. Abort using /stop or wait.", "red"));
 		//let videoID = ytdl.getVideoID(src);
 		//if (this.hasInCache(videoID)) {
@@ -177,14 +158,19 @@ class MediaPlayer extends EventEmitter {
 		//};
 		this.createVideoStream(src);
 	};
-	addToQueue(str){
+	addToQueue(str) {
 		return;
 		this.queue.push(str);
-		if(this.status === "stall" && this.queue.length === 1) this.play();
+		if (this.status === "stall" && this.queue.length === 1) this.play();
 	};
 	getSource(str) {
 		if (fs.existsSync(str)) return fs.createReadStream(str);
 		this.videoID = ytdl.getVideoID(str);
+
+
+		// TODO lighttube
+
+
 		return ytdl(str, {
 			filter: format => {
 				if (this.FPS === 60 && format.fps === 60) {
@@ -201,24 +187,55 @@ class MediaPlayer extends EventEmitter {
 		let sourceStream = this.getSource(src);
 		this.ffmpegProcess = spawn(ffPath, [
 			"-i", "-",
-			"-c:v", "png",
-			"-r", this.FPS, // 10 fps
+			"-r", this.FPS,
 			"-preset", "ultrafast",
+			"-vf", "scale=" + (128 * 4) + ":" + (128 * 2) + ",pad=" + (128 * 4) + ":" + (128 * 2) + ":(ow-iw)/2:(oh-ih)/2",
 			"-hide_banner",
-			"-f", "image2pipe",
+			"-f", "rawvideo",
+			"-pix_fmt", "rgb24",
 			"-"
 		]);
-		let splittedStream = new StreamSplitter(PNGHEADER);
+
+		/* let splittedStream = new StreamSplitter(PNGHEADER);
 		splittedStream.on("data", (pngFile) => {
 			this.addFrame(Buffer.concat([PNGHEADER, pngFile]));
 		});
+		
+		this.ffmpegProcess.stdout.pipe(splittedStream); */
+
+		this.ffmpegProcess.stdout.on("data", (data) => {
+			// Split the pixels into 8 chunks of size 128x128
+			const chunks = [];
+			const chunkWidth = 128;
+			const chunkHeight = 128;
+			let index = 0;
+			for (let row = 0; row < 2; row++) {
+				for (let col = 0; col < 4; col++) {
+					const chunk = [];
+					const startX = col * chunkWidth;
+					const endX = startX + chunkWidth;
+					const startY = row * chunkHeight;
+					const endY = startY + chunkHeight;
+					for (let y = startY; y < endY; y++) {
+						for (let x = startX; x < endX; x++) {
+							const index = y * 128 * 4 + x * 3;
+							chunk.push(i2map(data[index], data[index + 1], data[index + 2]));
+						}
+					}
+					chunks.push(chunk);
+				}
+			}
+
+			this.renderDisplays(chunks);
+		});
+
+		this.ffmpegProcess.stderr.on("data", (l) => console.log("[ffmpeg:stderr] " + l.toString()));
+
 		sourceStream.pipe(this.ffmpegProcess.stdin);
-		this.ffmpegProcess.stdout.pipe(splittedStream);
+
 		this.ffmpegProcess.on("close", (code, sig) => {
 			this.ffmpegProcess = null;
-			console.debug('calling start fuction')
 			this.status = "stall";
-			this.start();
 			console.log("ffmpeg exited with code", code, "signal", sig);
 		})
 		this.ffmpegProcess.on("error", (e) => serv.chat(new Msg("> FFMPEG: Error: " + e.toString(), "red")));
@@ -229,7 +246,7 @@ class MediaPlayer extends EventEmitter {
 		});*/
 	};
 	async renderImage(src) {
-		if (src === undefined) return console.log("renderImage called on undefined!");
+		/* if (src === undefined) return console.log("renderImage called on undefined!");
 		if (!Buffer.isBuffer(src)) {
 			if (fs.existsSync(src)) {
 				src = fs.readFileSync(src);
@@ -247,18 +264,22 @@ class MediaPlayer extends EventEmitter {
 			displays[n] = await convertFrame(displays[n]);
 		};
 
-		this.renderDisplays(displays);
+		this.renderDisplays(displays); */
 	};
 	renderDisplays(displays) {
-		for (let mapID in displays) {
+		/* for (let mapID in displays) {
 			this.serv.sendMapData(mapID, displays[mapID]);
-		};
+		}; */
+
+		displays.forEach((data, id) => {
+			this.serv.sendMapData(id, data);
+		});
 	};
-	async resizeImageToFit(data) {
+	/* async resizeImageToFit(data) {
 		return await sharp(data).resize({ width: 128 * this.displays.width, height: 128 * this.displays.height, fit: 'contain' }).png().toBuffer();
-	};
+	}; */
 	async divideToScreens(pngFile) {
-		// resize
+		/* // resize
 		if (!Buffer.isBuffer(pngFile) || pngFile.length == 0) return this.serv.chat(new Msg("Error: divideToScreens buffer is null, aborted", "red"));
 		pngFile = await this.resizeImageToFit(pngFile);
 
@@ -288,7 +309,7 @@ class MediaPlayer extends EventEmitter {
 			}
 		}
 
-		return displays;
+		return displays; */
 	};
 };
 

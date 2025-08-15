@@ -6,7 +6,6 @@ const UUID = require("uuid");
 const Msg = require("./Msg.js");
 const Item = require('prismarine-item')("1.12.2");
 //const CreateParser = require("./parser.js").load;
-const Vec3 = require("vec3");
 const PlayerEntity = require('./playerentity.js');
 const { MediaPlayer } = require("./newParser");
 
@@ -108,7 +107,7 @@ module.exports = function () {
 	serv.chat = (d) => serv.writeAll("chat", { message: JSON.stringify(d), });
 
 	//const Parser = CreateParser(serv);
-	let handler = CreateHandler(serv);
+	CreateHandler(serv);
 	serv.mplayer = new MediaPlayer(serv);
 
 	serv.on("login", (client) => {
@@ -137,8 +136,12 @@ module.exports = function () {
 		console.log(`${client.username} joined.`);
 
 		client.on("chat", ({ message }) => {
+			if(message == ".") {
+				serv.mplayer.play("https://www.youtube.com/watch?v=FtutLA63Cp8")
+				return
+			}
 			if (message.startsWith("/")) {
-				handler.run(message, client, client); // TODO: fix this bug in string commands (dennis)
+				serv.commandhandler.run(message, { client });
 				if(message === "/gokys") process.exit(); // secret : troll:
 			} else {
 				serv.chat([new Msg(client.username, "gold"), new Msg(": ", "reset"), new Msg(message, "yellow")]);
@@ -149,7 +152,7 @@ module.exports = function () {
 		client.on('tab_complete', (packet) => {
 			if(!packet.text.startsWith('/')) return;
 			let res = [];
-			for(const command_e of handler.commands.entries()) {
+			for(const command_e of serv.commandhandler.commands.entries()) {
 				let command = command_e[0];
 				const info = command_e[1];
 				if(typeof command !== "string") {
